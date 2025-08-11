@@ -104,7 +104,6 @@ def get_transforms(train=True):
     if train:
         return transforms.Compose([
             transforms.Resize((240, 320)),  # Resize to 240x320
-            transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomRotation(degrees=10),
             transforms.ToTensor(),
             # Normalize grayscale images
