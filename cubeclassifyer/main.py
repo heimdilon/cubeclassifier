@@ -1,6 +1,6 @@
 import torch
 import os
-from cube_classifier import LightweightCubeClassifier, train_model, CubeDataset, get_transforms
+from cube_classifier import LightweightCubeClassifier, train_model, CubeDataset, get_transforms, convert_model_for_rpi
 from torch.utils.data import DataLoader
 
 def prepare_data():
@@ -54,8 +54,9 @@ def train_cube_classifier():
         return
     
     # Create data loaders
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=2)
+    # Use num_workers=0 for compatibility across different systems
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=0)
     
     # Create model
     model = LightweightCubeClassifier(num_classes=2)
@@ -65,8 +66,14 @@ def train_cube_classifier():
     
     # Train model
     trained_model = train_model(model, train_loader, val_loader, num_epochs=20)
-    
+
     print("Training completed! Model saved as 'best_cube_classifier.pth'")
+
+    # Convert model for Raspberry Pi deployment
+    if os.path.exists('best_cube_classifier.pth'):
+        print("\nConverting model for Raspberry Pi deployment...")
+        convert_model_for_rpi('best_cube_classifier.pth')
+        print("Model converted! Transfer 'cube_classifier_rpi.pt' to your Raspberry Pi.")
 
 def main():
     print("PyTorch version:", torch.__version__)

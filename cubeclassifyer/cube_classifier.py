@@ -192,14 +192,27 @@ def train_model(model, train_loader, val_loader, num_epochs=20, learning_rate=0.
 
 # Function to convert model for Raspberry Pi deployment
 def convert_model_for_rpi(model_path):
-    model = LightweightCubeClassifier()
-    model.load_state_dict(torch.load(model_path, map_location='cpu'))
-    model.eval()
-    
-    # Convert to TorchScript for easier deployment
-    example_input = torch.rand(1, 1, 240, 320)  # Grayscale input
-    traced_model = torch.jit.trace(model, example_input)
-    traced_model.save("cube_classifier_rpi.pt")
-    
-    print("Model converted for Raspberry Pi deployment!")
+    """Convert trained model to TorchScript for Raspberry Pi deployment
+
+    Args:
+        model_path: Path to the trained model (.pth file)
+    """
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+
+    try:
+        model = LightweightCubeClassifier()
+        model.load_state_dict(torch.load(model_path, map_location='cpu'))
+        model.eval()
+
+        # Convert to TorchScript for easier deployment
+        example_input = torch.rand(1, 1, 240, 320)  # Grayscale input
+        traced_model = torch.jit.trace(model, example_input)
+        traced_model.save("cube_classifier_rpi.pt")
+
+        print("Model converted for Raspberry Pi deployment!")
+        print(f"Output file: cube_classifier_rpi.pt")
+    except Exception as e:
+        print(f"Error converting model: {e}")
+        raise
 

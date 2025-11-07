@@ -4,10 +4,24 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
 import time
+import os
+import sys
+
+# Check if model file exists
+MODEL_PATH = "cube_classifier_rpi.pt"
+if not os.path.exists(MODEL_PATH):
+    print(f"Error: Model file '{MODEL_PATH}' not found!")
+    print("Please ensure you have transferred the model file to this directory.")
+    sys.exit(1)
 
 # Load the TorchScript model
-model = torch.jit.load("cube_classifier_rpi.pt")
-model.eval()
+try:
+    model = torch.jit.load(MODEL_PATH)
+    model.eval()
+    print(f"Model loaded successfully from '{MODEL_PATH}'")
+except Exception as e:
+    print(f"Error loading model: {e}")
+    sys.exit(1)
 
 # Define preprocessing transforms for grayscale images
 transform = transforms.Compose([
