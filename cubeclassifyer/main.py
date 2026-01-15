@@ -113,7 +113,7 @@ def train_cube_classifier(resume_from=None):
     logger.info("Starting training...")
 
     # Train model
-    trained_model = train_model(
+    train_model(
         model,
         train_loader,
         val_loader,
