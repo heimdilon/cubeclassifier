@@ -1,11 +1,3 @@
-<!--
-LLM-NOTE: This project is a complete end-to-end computer vision system for classifying cube defects.
-The main workflow is:
-1.  Use `main.py` on a desktop to train the model. This script uses `cube_classifier.py` for the model definition and training logic.
-2.  The training process generates `best_cube_classifier.pth` and a TorchScript version `cube_classifier_rpi.pt`.
-3.  The `cube_classifier_rpi.pt` and `rpi_cube_detector.py` are transferred to a Raspberry Pi.
-4.  `rpi_cube_detector.py` is run on the Raspberry Pi for real-time defect detection using a camera.
--->
 # Cube Defect Detection System
 
 This project implements a lightweight object detection system to classify cubes as either "good" or "defective" using PyTorch. The model is designed to run efficiently on both a desktop GPU (for training) and a Raspberry Pi 5 with 2GB RAM (for inference).
@@ -17,14 +9,34 @@ This project implements a lightweight object detection system to classify cubes 
 3. **Deployment Target**: Raspberry Pi 5 with 2GB RAM
 4. **Input Format**: 320x240 grayscale images
 
+## Features
+
+### Training
+- **Automated Checkpointing**: Save progress every N epochs
+- **Resume Capability**: Continue training from any checkpoint
+- **Early Stopping**: Prevent overfitting with configurable patience
+- **Class Imbalance Handling**: Weighted loss function
+- **Gradient Clipping**: Prevent exploding gradients
+- **Model Versioning**: Timestamped model saves
+- **Comprehensive Logging**: Timestamped logs to file
+- **CLI Interface**: Non-interactive command-line interface
+
+### Inference (Raspberry Pi)
+- **Confidence Thresholding**: Reject low-confidence predictions
+- **Color-Coded Display**: Green (good), Red (defective), Yellow (uncertain)
+- **FPS Display**: Real-time performance monitoring
+- **Camera Auto-Reconnect**: Automatic recovery from camera failures
+- **Frame Saving**: Option to save detection frames
+- **Graceful Shutdown**: Clean resource cleanup on interruption
+
 ## Setup Instructions
 
 ### Desktop Setup (Training)
 
 1. Install required packages:
-   ```bash
-   pip install torch torchvision opencv-python numpy Pillow
-   ```
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 2. Organize your data in the following structure:
    ```
@@ -49,12 +61,34 @@ This project implements a lightweight object detection system to classify cubes 
            └── ...
    ```
 
-3. Ensure all images are 320x240 grayscale images
+ 3. Ensure all images are 320x240 grayscale images
 
 4. Run the training script:
-   ```bash
-   python main.py
-   ```
+    ```bash
+    # Prepare data directories
+    python main.py prepare
+
+    # Train model
+    python main.py train
+
+    # Resume from checkpoint
+    python main.py train --resume checkpoints/checkpoint_epoch_10.pth
+    ```
+
+5. Monitor training logs:
+    ```bash
+    tail -f logs/training.log
+    ```
+
+### Configuration
+
+Edit `config.py` to customize training parameters:
+- `NUM_EPOCHS`: Training duration (default: 20)
+- `LEARNING_RATE`: Optimization rate (default: 0.001)
+- `BATCH_SIZE`: Batch size (default: 16)
+- `PATIENCE`: Early stopping patience (default: 5)
+- `SAVE_CHECKPOINT_EVERY`: Save checkpoint interval (default: 5)
+- `LOG_LEVEL`: Logging verbosity (default: "INFO")
 
 ### Raspberry Pi Setup (Deployment)
 
@@ -63,14 +97,32 @@ This project implements a lightweight object detection system to classify cubes 
    pip install -r rpi_requirements.txt
    ```
 
-2. Transfer the following files to your Raspberry Pi:
-   - `cube_classifier_rpi.pt` (generated after training)
-   - `rpi_cube_detector.py`
+  2. Transfer the following files to your Raspberry Pi:
+    - `cube_classifier_rpi.pt` (generated after training)
+    - `rpi_cube_detector.py`
 
-3. Run the detection script:
-   ```bash
-   python rpi_cube_detector.py
-   ```
+  3. Run the detection script:
+    ```bash
+    # Basic detection
+    python rpi_cube_detector.py
+
+    # Save frames with detections
+    python rpi_cube_detector.py --save-frames
+
+    # Custom confidence threshold
+    python rpi_cube_detector.py --threshold 0.8
+
+    # Different camera index
+    python rpi_cube_detector.py --camera 1
+
+    # Combine options
+    python rpi_cube_detector.py --save-frames --save-dir my_frames --threshold 0.9
+    ```
+
+  4. Monitor performance:
+    - Press 'q' to quit
+    - View FPS and inference time in real-time
+    - Frames saved to `saved_frames/` if enabled
 
 ## Model Details
 <!-- LLM-NOTE: `main.py` is the primary entry point for training the model. -->
