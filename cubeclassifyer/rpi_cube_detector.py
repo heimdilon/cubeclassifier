@@ -6,36 +6,12 @@ import torchvision.transforms as transforms
 import time
 import os
 import sys
-import logging
-import argparse
-from datetime import datetime
 
-# Setup simple logger for Pi (no file logging to reduce I/O)
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-logger = logging.getLogger(__name__)
-
-# Model path configuration
+# Check if model file exists
 MODEL_PATH = "cube_classifier_rpi.pt"
-
-# Check if model file exists before attempting to load
 if not os.path.exists(MODEL_PATH):
-    logger.error(f"Model file '{MODEL_PATH}' not found!")
-    logger.info(
-        "Please train the model on desktop and transfer the TorchScript model to this directory."
-    )
-    logger.info("\nExpected workflow:")
-    logger.info("1. Run 'python main.py' on desktop to train and convert the model")
-    logger.info("2. Transfer 'cube_classifier_rpi.pt' to this Raspberry Pi")
-    logger.info("3. Run this script: python rpi_cube_detector.py")
-    sys.exit(1)
-
-# Load the TorchScript model
-try:
-    model = torch.jit.load(MODEL_PATH)
-    model.eval()
-    logger.info(f"Model loaded successfully from '{MODEL_PATH}'")
-except Exception as e:
-    logger.error(f"Error loading model from '{MODEL_PATH}': {e}")
+    print(f"Error: Model file '{MODEL_PATH}' not found!")
+    print("Please ensure you have transferred the model file to this directory.")
     sys.exit(1)
 
 # Load the TorchScript model
@@ -44,7 +20,7 @@ try:
     model.eval()
     print(f"Model loaded successfully from '{MODEL_PATH}'")
 except Exception as e:
-    print(f"Error loading model from '{MODEL_PATH}': {e}")
+    print(f"Error loading model: {e}")
     sys.exit(1)
 
 # Define preprocessing transforms for grayscale images

@@ -1,12 +1,6 @@
 import torch
 import os
-from cube_classifier import (
-    LightweightCubeClassifier,
-    train_model,
-    CubeDataset,
-    get_transforms,
-    convert_model_for_rpi,
-)
+from cube_classifier import LightweightCubeClassifier, train_model, CubeDataset, get_transforms, convert_model_for_rpi
 from torch.utils.data import DataLoader
 import config
 import argparse
@@ -81,30 +75,12 @@ def train_cube_classifier(resume_from=None):
         logger.info(f"- {os.path.join(config.VAL_DIR, 'good')}/")
         logger.info(f"- {os.path.join(config.VAL_DIR, 'defective')}/")
         return
-
-    # Create data loaders with optimization flags
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config.BATCH_SIZE,
-        shuffle=True,
-        num_workers=config.NUM_WORKERS,
-        pin_memory=config.USE_PINNED_MEMORY,
-        persistent_workers=config.USE_PERSISTENT_WORKERS,
-    )
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=config.BATCH_SIZE,
-        shuffle=False,
-        num_workers=config.NUM_WORKERS,
-        pin_memory=config.USE_PINNED_MEMORY,
-        persistent_workers=config.USE_PERSISTENT_WORKERS,
-    )
-
-    if config.USE_PINNED_MEMORY and torch.cuda.is_available():
-        logger.info("Memory pinning enabled for faster GPU transfer")
-    if config.USE_PERSISTENT_WORKERS:
-        logger.info("Persistent workers enabled for faster data loading")
-
+    
+    # Create data loaders
+    # Use num_workers=0 for compatibility across different systems
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=0)
+    
     # Create model
     model = LightweightCubeClassifier(num_classes=config.NUM_CLASSES)
 
@@ -117,37 +93,15 @@ def train_cube_classifier(resume_from=None):
     logger.info("Starting training...")
 
     # Train model
-    trained_model = train_model(
-        model,
-        train_loader,
-        val_loader,
-        num_epochs=config.NUM_EPOCHS,
-        learning_rate=config.LEARNING_RATE,
-        patience=config.PATIENCE,
-        max_grad_norm=config.MAX_GRAD_NORM,
-        resume_from_checkpoint=resume_from,
-    )
+    trained_model = train_model(model, train_loader, val_loader, num_epochs=20)
 
-    logger.info(f"Training completed! Model saved as '{config.MODEL_PATH}'")
+    print("Training completed! Model saved as 'best_cube_classifier.pth'")
 
     # Convert model for Raspberry Pi deployment
-    if os.path.exists(config.MODEL_PATH):
-        logger.info("Converting model for Raspberry Pi deployment...")
-        try:
-            convert_model_for_rpi(config.MODEL_PATH, config.TORCHSCRIPT_MODEL_PATH)
-            logger.info(
-                f"Model converted successfully! Transfer '{config.TORCHSCRIPT_MODEL_PATH}' to your Raspberry Pi."
-            )
-        except Exception as e:
-            logger.error(f"Error converting model: {e}")
-            logger.info(
-                f"You can manually convert later using: python -c \"from cube_classifier import convert_model_for_rpi; convert_model_for_rpi('{config.MODEL_PATH}')\""
-            )
-    else:
-        logger.warning(
-            f"Model file '{config.MODEL_PATH}' not found. Skipping conversion."
-        )
-
+    if os.path.exists('best_cube_classifier.pth'):
+        print("\nConverting model for Raspberry Pi deployment...")
+        convert_model_for_rpi('best_cube_classifier.pth')
+        print("Model converted! Transfer 'cube_classifier_rpi.pt' to your Raspberry Pi.")
 
 def main():
     parser = argparse.ArgumentParser(description="Cube Classifier Training Pipeline")

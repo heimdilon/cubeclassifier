@@ -36,11 +36,6 @@ cube_dataset/
 data/
 datasets/
 
-# Logs and checkpoints
-logs/
-checkpoints/
-saved_frames/
-
 # IDE
 .vscode/
 .idea/
