@@ -150,14 +150,15 @@ def train_model(
     max_grad_norm=1.0,
     resume_from_checkpoint=None,
 ):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-
     if len(train_loader.dataset) == 0 or len(val_loader.dataset) == 0:
         logger.error("Training or validation dataset is empty; aborting training.")
         raise ValueError("Training or validation dataset is empty.")
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
     start_epoch = 0
+
     best_acc = 0.0
     epochs_without_improvement = 0
 
@@ -193,9 +194,10 @@ def train_model(
         )
 
     # Calculate class weights for handling imbalance
-    class_counts = torch.zeros(2)
+    num_classes = config.NUM_CLASSES
+    class_counts = torch.zeros(num_classes)
     for _, labels in train_loader:
-        class_counts += torch.bincount(labels, minlength=2)
+        class_counts += torch.bincount(labels, minlength=num_classes)
 
     # Inverse weighting: weight = total_samples / (num_classes * class_count)
     total_samples = class_counts.sum()
@@ -206,7 +208,7 @@ def train_model(
         )
         safe_class_counts = torch.clamp(safe_class_counts, min=1)
 
-    class_weights = total_samples / (len(class_counts) * safe_class_counts)
+    class_weights = total_samples / (num_classes * safe_class_counts)
 
     # Use weighted loss to handle class imbalance
     criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
@@ -338,7 +340,7 @@ def train_model(
 
 
 # Function to convert model for Raspberry Pi deployment
-def convert_model_for_rpi(model_path, output_path="cube_classifier_rpi.pt"):
+def convert_model_for_rpi(model_path, output_path=config.TORCHSCRIPT_MODEL_PATH):
     """Convert trained model to TorchScript for Raspberry Pi deployment
 
     Args:
