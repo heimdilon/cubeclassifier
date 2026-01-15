@@ -78,8 +78,18 @@ def train_cube_classifier(resume_from=None):
     
     # Create data loaders
     # Use num_workers=0 for compatibility across different systems
-    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=0)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config.BATCH_SIZE,
+        shuffle=True,
+        num_workers=config.NUM_WORKERS,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=config.NUM_WORKERS,
+    )
     
     # Create model
     model = LightweightCubeClassifier(num_classes=config.NUM_CLASSES)
@@ -93,7 +103,16 @@ def train_cube_classifier(resume_from=None):
     logger.info("Starting training...")
 
     # Train model
-    trained_model = train_model(model, train_loader, val_loader, num_epochs=20)
+    trained_model = train_model(
+        model,
+        train_loader,
+        val_loader,
+        num_epochs=config.NUM_EPOCHS,
+        learning_rate=config.LEARNING_RATE,
+        patience=config.PATIENCE,
+        max_grad_norm=config.MAX_GRAD_NORM,
+        resume_from_checkpoint=resume_from,
+    )
 
     print("Training completed! Model saved as 'best_cube_classifier.pth'")
 

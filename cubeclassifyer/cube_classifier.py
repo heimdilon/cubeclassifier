@@ -68,14 +68,6 @@ class CubeDataset(Dataset):
                 image = self.transform(image)
             label = torch.tensor(ann["label"], dtype=torch.long)
             return image, label
-        except Exception as e:
-            print(f"Warning: Failed to load image {img_path}: {e}")
-            # Return a blank image (all zeros) as fallback
-            image = Image.new("L", (320, 240), 0)
-            if self.transform:
-                image = self.transform(image)
-            label = torch.tensor(ann["label"], dtype=torch.long)
-            return image, label
 
 
 # Lightweight CNN for grayscale images
@@ -163,6 +155,14 @@ def train_model(
 
     start_epoch = 0
 
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    # Use cosine annealing scheduler for better convergence
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=num_epochs, eta_min=1e-6
+    )
+    logger.info("Using Cosine Annealing learning rate scheduler")
+
     # Resume from checkpoint if specified
     if resume_from_checkpoint and os.path.exists(resume_from_checkpoint):
         logger.info(f"Resuming training from checkpoint: {resume_from_checkpoint}")
@@ -182,20 +182,12 @@ def train_model(
                 f"Checkpoint not found: {resume_from_checkpoint}. Starting from scratch."
             )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
     # Enable mixed precision training
-    use_amp = torch.cuda.is_available()
+    use_amp = torch.cuda.is_available() and config.USE_MIXED_PRECISION
     scaler = GradScaler() if use_amp else None
 
     if use_amp:
         logger.info("Mixed precision training enabled (AMP)")
-
-    # Use cosine annealing scheduler for better convergence
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=num_epochs, eta_min=1e-6
-    )
-    logger.info("Using Cosine Annealing learning rate scheduler")
 
     # Calculate class weights for handling imbalance
     class_counts = torch.zeros(2)
@@ -204,7 +196,15 @@ def train_model(
 
     # Inverse weighting: weight = total_samples / (num_classes * class_count)
     total_samples = class_counts.sum()
-    class_weights = total_samples / (len(class_counts) * class_counts)
+    class_weights = torch.ones_like(class_counts)
+    nonzero_classes = class_counts > 0
+    if not torch.all(nonzero_classes):
+        logger.warning(
+            "One or more classes have zero samples; falling back to uniform weights."
+        )
+    class_weights[nonzero_classes] = total_samples / (
+        len(class_counts) * class_counts[nonzero_classes]
+    )
 
     # Use weighted loss to handle class imbalance
     criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
@@ -353,10 +353,11 @@ def convert_model_for_rpi(model_path):
         # Convert to TorchScript for easier deployment
         example_input = torch.rand(1, 1, 240, 320)  # Grayscale input
         traced_model = torch.jit.trace(model, example_input)
-        traced_model.save("cube_classifier_rpi.pt")
+        output_path = config.TORCHSCRIPT_MODEL_PATH
+        traced_model.save(output_path)
 
         print("Model converted for Raspberry Pi deployment!")
-        print(f"Output file: cube_classifier_rpi.pt")
+        print(f"Output file: {output_path}")
     except Exception as e:
         print(f"Error converting model: {e}")
         raise
