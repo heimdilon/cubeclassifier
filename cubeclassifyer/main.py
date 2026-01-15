@@ -1,6 +1,12 @@
 import torch
 import os
-from cube_classifier import LightweightCubeClassifier, train_model, CubeDataset, get_transforms, convert_model_for_rpi
+from cube_classifier import (
+    LightweightCubeClassifier,
+    train_model,
+    CubeDataset,
+    get_transforms,
+    convert_model_for_rpi,
+)
 from torch.utils.data import DataLoader
 import config
 import argparse
@@ -75,22 +81,26 @@ def train_cube_classifier(resume_from=None):
         logger.info(f"- {os.path.join(config.VAL_DIR, 'good')}/")
         logger.info(f"- {os.path.join(config.VAL_DIR, 'defective')}/")
         return
-    
+
     # Create data loaders
-    # Use num_workers=0 for compatibility across different systems
+    num_workers = config.NUM_WORKERS
+    if os.name == "nt":
+        num_workers = 0
+        logger.info("Windows detected; using num_workers=0 for DataLoader.")
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=config.BATCH_SIZE,
         shuffle=True,
-        num_workers=config.NUM_WORKERS,
+        num_workers=num_workers,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=config.BATCH_SIZE,
         shuffle=False,
-        num_workers=config.NUM_WORKERS,
+        num_workers=num_workers,
     )
-    
+
     # Create model
     model = LightweightCubeClassifier(num_classes=config.NUM_CLASSES)
 
@@ -103,7 +113,7 @@ def train_cube_classifier(resume_from=None):
     logger.info("Starting training...")
 
     # Train model
-    trained_model = train_model(
+    train_model(
         model,
         train_loader,
         val_loader,
@@ -117,10 +127,13 @@ def train_cube_classifier(resume_from=None):
     print("Training completed! Model saved as 'best_cube_classifier.pth'")
 
     # Convert model for Raspberry Pi deployment
-    if os.path.exists('best_cube_classifier.pth'):
+    if os.path.exists("best_cube_classifier.pth"):
         print("\nConverting model for Raspberry Pi deployment...")
-        convert_model_for_rpi('best_cube_classifier.pth')
-        print("Model converted! Transfer 'cube_classifier_rpi.pt' to your Raspberry Pi.")
+        convert_model_for_rpi("best_cube_classifier.pth")
+        print(
+            "Model converted! Transfer 'cube_classifier_rpi.pt' to your Raspberry Pi."
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(description="Cube Classifier Training Pipeline")
