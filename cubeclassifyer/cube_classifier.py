@@ -183,10 +183,13 @@ def train_model(
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        if use_amp and checkpoint.get("scaler_state_dict") is not None:
+            scaler.load_state_dict(checkpoint["scaler_state_dict"])
         start_epoch = checkpoint["epoch"] + 1
         best_acc = checkpoint.get("best_acc", 0.0)
         epochs_without_improvement = checkpoint.get("epochs_without_improvement", 0)
         logger.info(f"Resumed from epoch {start_epoch}, best accuracy: {best_acc:.4f}")
+
     elif resume_from_checkpoint:
         logger.warning(
             f"Checkpoint not found: {resume_from_checkpoint}. Starting from scratch."
@@ -328,6 +331,7 @@ def train_model(
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "scheduler_state_dict": scheduler.state_dict(),
+                    "scaler_state_dict": scaler.state_dict() if use_amp else None,
                     "best_acc": best_acc,
                     "epochs_without_improvement": epochs_without_improvement,
                 },
