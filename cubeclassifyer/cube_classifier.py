@@ -68,14 +68,6 @@ class CubeDataset(Dataset):
                 image = self.transform(image)
             label = torch.tensor(ann["label"], dtype=torch.long)
             return image, label
-        except Exception as e:
-            print(f"Warning: Failed to load image {img_path}: {e}")
-            # Return a blank image (all zeros) as fallback
-            image = Image.new("L", (320, 240), 0)
-            if self.transform:
-                image = self.transform(image)
-            label = torch.tensor(ann["label"], dtype=torch.long)
-            return image, label
 
 
 # Lightweight CNN for grayscale images
@@ -161,26 +153,13 @@ def train_model(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    start_epoch = 0
+    if len(train_loader.dataset) == 0 or len(val_loader.dataset) == 0:
+        logger.error("Training or validation dataset is empty; aborting training.")
+        raise ValueError("Training or validation dataset is empty.")
 
-    # Resume from checkpoint if specified
-    if resume_from_checkpoint and os.path.exists(resume_from_checkpoint):
-        logger.info(f"Resuming training from checkpoint: {resume_from_checkpoint}")
-        checkpoint = torch.load(resume_from_checkpoint, map_location=device)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
-        start_epoch = checkpoint["epoch"] + 1
-        best_acc = checkpoint.get("best_acc", 0.0)
-        epochs_without_improvement = checkpoint.get("epochs_without_improvement", 0)
-        logger.info(f"Resumed from epoch {start_epoch}, best accuracy: {best_acc:.4f}")
-    else:
-        best_acc = 0.0
-        epochs_without_improvement = 0
-        if resume_from_checkpoint:
-            logger.warning(
-                f"Checkpoint not found: {resume_from_checkpoint}. Starting from scratch."
-            )
+    start_epoch = 0
+    best_acc = 0.0
+    epochs_without_improvement = 0
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -197,6 +176,22 @@ def train_model(
     )
     logger.info("Using Cosine Annealing learning rate scheduler")
 
+    # Resume from checkpoint if specified
+    if resume_from_checkpoint and os.path.exists(resume_from_checkpoint):
+        logger.info(f"Resuming training from checkpoint: {resume_from_checkpoint}")
+        checkpoint = torch.load(resume_from_checkpoint, map_location=device)
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        start_epoch = checkpoint["epoch"] + 1
+        best_acc = checkpoint.get("best_acc", 0.0)
+        epochs_without_improvement = checkpoint.get("epochs_without_improvement", 0)
+        logger.info(f"Resumed from epoch {start_epoch}, best accuracy: {best_acc:.4f}")
+    elif resume_from_checkpoint:
+        logger.warning(
+            f"Checkpoint not found: {resume_from_checkpoint}. Starting from scratch."
+        )
+
     # Calculate class weights for handling imbalance
     class_counts = torch.zeros(2)
     for _, labels in train_loader:
@@ -204,7 +199,14 @@ def train_model(
 
     # Inverse weighting: weight = total_samples / (num_classes * class_count)
     total_samples = class_counts.sum()
-    class_weights = total_samples / (len(class_counts) * class_counts)
+    safe_class_counts = class_counts.clone()
+    if torch.any(class_counts == 0):
+        logger.warning(
+            "One or more classes have zero samples; clamping counts to 1 for weights."
+        )
+        safe_class_counts = torch.clamp(safe_class_counts, min=1)
+
+    class_weights = total_samples / (len(class_counts) * safe_class_counts)
 
     # Use weighted loss to handle class imbalance
     criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
@@ -336,31 +338,29 @@ def train_model(
 
 
 # Function to convert model for Raspberry Pi deployment
-def convert_model_for_rpi(model_path):
+def convert_model_for_rpi(model_path, output_path="cube_classifier_rpi.pt"):
     """Convert trained model to TorchScript for Raspberry Pi deployment
 
     Args:
         model_path: Path to the trained model (.pth file)
+        output_path: Path to save the TorchScript model
     """
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file not found: {model_path}")
 
     try:
         model = LightweightCubeClassifier()
-        model.load_state_dict(torch.load(model_path, map_location='cpu'))
+        model.load_state_dict(torch.load(model_path, map_location="cpu"))
         model.eval()
 
         # Convert to TorchScript for easier deployment
         example_input = torch.rand(1, 1, 240, 320)  # Grayscale input
         traced_model = torch.jit.trace(model, example_input)
-        traced_model.save("cube_classifier_rpi.pt")
+        traced_model.save(output_path)
 
-        print("Model converted for Raspberry Pi deployment!")
-        print(f"Output file: cube_classifier_rpi.pt")
+        logger.info(
+            f"Model converted for Raspberry Pi deployment! Saved to '{output_path}'"
+        )
     except Exception as e:
-        print(f"Error converting model: {e}")
+        logger.error(f"Error converting model: {e}")
         raise
-
-    logger.info(
-        f"Model converted for Raspberry Pi deployment! Saved to '{output_path}'"
-    )

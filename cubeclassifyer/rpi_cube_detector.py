@@ -1,11 +1,13 @@
 import torch
 import cv2
 import numpy as np
-from PIL import Image
-import torchvision.transforms as transforms
 import time
 import os
 import sys
+import argparse
+from datetime import datetime
+from utils import logger
+
 
 # Check if model file exists
 MODEL_PATH = "cube_classifier_rpi.pt"
@@ -22,15 +24,6 @@ try:
 except Exception as e:
     print(f"Error loading model: {e}")
     sys.exit(1)
-
-# Define preprocessing transforms for grayscale images
-transform = transforms.Compose(
-    [
-        transforms.Resize((240, 320)),  # Resize to 240x320
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5]),  # Normalize grayscale
-    ]
-)
 
 # Class names
 class_names = ["good", "defective", "uncertain"]
