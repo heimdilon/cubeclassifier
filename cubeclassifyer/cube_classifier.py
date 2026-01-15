@@ -158,14 +158,13 @@ def train_model(
     model.to(device)
 
     start_epoch = 0
-
     best_acc = 0.0
     epochs_without_improvement = 0
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # Enable mixed precision training
-    use_amp = torch.cuda.is_available()
+    use_amp = torch.cuda.is_available() and config.USE_MIXED_PRECISION
     scaler = GradScaler() if use_amp else None
 
     if use_amp:
@@ -201,14 +200,15 @@ def train_model(
 
     # Inverse weighting: weight = total_samples / (num_classes * class_count)
     total_samples = class_counts.sum()
-    safe_class_counts = class_counts.clone()
-    if torch.any(class_counts == 0):
+    class_weights = torch.ones_like(class_counts)
+    nonzero_classes = class_counts > 0
+    if not torch.all(nonzero_classes):
         logger.warning(
-            "One or more classes have zero samples; clamping counts to 1 for weights."
+            "One or more classes have zero samples; falling back to uniform weights."
         )
-        safe_class_counts = torch.clamp(safe_class_counts, min=1)
-
-    class_weights = total_samples / (num_classes * safe_class_counts)
+    class_weights[nonzero_classes] = total_samples / (
+        num_classes * class_counts[nonzero_classes]
+    )
 
     # Use weighted loss to handle class imbalance
     criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
@@ -363,6 +363,7 @@ def convert_model_for_rpi(model_path, output_path=config.TORCHSCRIPT_MODEL_PATH)
         logger.info(
             f"Model converted for Raspberry Pi deployment! Saved to '{output_path}'"
         )
+
     except Exception as e:
         logger.error(f"Error converting model: {e}")
         raise

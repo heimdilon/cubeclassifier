@@ -119,6 +119,8 @@ def train_cube_classifier(resume_from=None):
         val_loader,
         num_epochs=config.NUM_EPOCHS,
         learning_rate=config.LEARNING_RATE,
+        patience=config.PATIENCE,
+        max_grad_norm=config.MAX_GRAD_NORM,
         resume_from_checkpoint=resume_from,
     )
 
