@@ -2,19 +2,35 @@ import torch
 import os
 from cube_classifier import LightweightCubeClassifier, train_model, CubeDataset, get_transforms, convert_model_for_rpi
 from torch.utils.data import DataLoader
+import config
+import argparse
+from utils import logger
+
 
 def prepare_data():
     """Prepare data directories structure"""
     data_dirs = [
-        "cube_dataset/train/good",
-        "cube_dataset/train/defective",
-        "cube_dataset/val/good",
-        "cube_dataset/val/defective"
+        os.path.join(config.TRAIN_DIR, "good"),
+        os.path.join(config.TRAIN_DIR, "defective"),
+        os.path.join(config.VAL_DIR, "good"),
+        os.path.join(config.VAL_DIR, "defective"),
     ]
-    
+
     for dir_path in data_dirs:
         os.makedirs(dir_path, exist_ok=True)
-    
+
+    logger.info("Data directory structure created:")
+    logger.info(f"- {config.DATA_DIR}/")
+    logger.info(f"  - train/")
+    logger.info(f"    - good/")
+    logger.info(f"    - defective/")
+    logger.info(f"  - val/")
+    logger.info(f"    - good/")
+    logger.info(f"    - defective/")
+    logger.info(
+        "\nPlease place your 320x240 grayscale cube images in the appropriate folders."
+    )
+
     print("Data directory structure created:")
     print("- cube_dataset/")
     print("  - train/")
@@ -23,34 +39,41 @@ def prepare_data():
     print("  - val/")
     print("    - good/")
     print("    - defective/")
-    print("\nPlease place your 320x240 grayscale cube images in the appropriate folders.")
+    print(
+        "\nPlease place your 320x240 grayscale cube images in the appropriate folders."
+    )
 
-def train_cube_classifier():
-    """Train the cube classifier model"""
+
+def train_cube_classifier(resume_from=None):
+    """Train the cube classifier model
+
+    Args:
+        resume_from: Path to checkpoint file to resume training from
+    """
     # Check if data directories exist
-    if not os.path.exists("cube_dataset"):
-        print("Data directories not found. Creating structure...")
+    if not os.path.exists(config.DATA_DIR):
+        logger.info("Data directories not found. Creating structure...")
         prepare_data()
-    
+
     # Create datasets
     train_dataset = CubeDataset(
-        root_dir="cube_dataset/train",
-        transform=get_transforms(train=True)
+        root_dir=config.TRAIN_DIR, transform=get_transforms(train=True)
     )
-    
+
     val_dataset = CubeDataset(
-        root_dir="cube_dataset/val",
-        transform=get_transforms(train=False)
+        root_dir=config.VAL_DIR, transform=get_transforms(train=False)
     )
-    
+
     # Check if we have data
     if len(train_dataset) == 0 or len(val_dataset) == 0:
-        print("No data found in dataset directories.")
-        print("Please place your 320x240 grayscale cube images in the appropriate folders:")
-        print("- cube_dataset/train/good/")
-        print("- cube_dataset/train/defective/")
-        print("- cube_dataset/val/good/")
-        print("- cube_dataset/val/defective/")
+        logger.warning("No data found in dataset directories.")
+        logger.info(
+            "Please place your 320x240 grayscale cube images in appropriate folders:"
+        )
+        logger.info(f"- {os.path.join(config.TRAIN_DIR, 'good')}/")
+        logger.info(f"- {os.path.join(config.TRAIN_DIR, 'defective')}/")
+        logger.info(f"- {os.path.join(config.VAL_DIR, 'good')}/")
+        logger.info(f"- {os.path.join(config.VAL_DIR, 'defective')}/")
         return
     
     # Create data loaders
@@ -59,11 +82,16 @@ def train_cube_classifier():
     val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=0)
     
     # Create model
-    model = LightweightCubeClassifier(num_classes=2)
-    
-    print(f"Training model with {len(train_dataset)} training samples and {len(val_dataset)} validation samples")
-    print("Starting training...")
-    
+    model = LightweightCubeClassifier(num_classes=config.NUM_CLASSES)
+
+    logger.info(
+        f"Training model with {len(train_dataset)} training samples and {len(val_dataset)} validation samples"
+    )
+    logger.info(
+        f"Configuration: epochs={config.NUM_EPOCHS}, lr={config.LEARNING_RATE}, batch_size={config.BATCH_SIZE}"
+    )
+    logger.info("Starting training...")
+
     # Train model
     trained_model = train_model(model, train_loader, val_loader, num_epochs=20)
 
@@ -76,26 +104,36 @@ def train_cube_classifier():
         print("Model converted! Transfer 'cube_classifier_rpi.pt' to your Raspberry Pi.")
 
 def main():
-    print("PyTorch version:", torch.__version__)
-    print("CUDA available:", torch.cuda.is_available())
-    
+    parser = argparse.ArgumentParser(description="Cube Classifier Training Pipeline")
+    parser.add_argument(
+        "action",
+        choices=["prepare", "train"],
+        help="Action to perform: 'prepare' or 'train'",
+    )
+    parser.add_argument(
+        "--resume",
+        type=str,
+        default=None,
+        help="Path to checkpoint file to resume training from",
+    )
+
+    args = parser.parse_args()
+
+    logger.info(f"PyTorch version: {torch.__version__}")
+    logger.info(f"CUDA available: {torch.cuda.is_available()}")
+
     if torch.cuda.is_available():
-        print("CUDA version:", torch.version.cuda)
-        print("GPU count:", torch.cuda.device_count())
-        print("Current GPU:", torch.cuda.get_device_name())
-    
-    print("\nOptions:")
-    print("1. Prepare data directory structure")
-    print("2. Train cube classifier model")
-    
-    choice = input("Enter your choice (1 or 2): ")
-    
-    if choice == "1":
+        logger.info(f"CUDA version: {torch.version.cuda}")
+        logger.info(f"GPU count: {torch.cuda.device_count()}")
+        logger.info(f"Current GPU: {torch.cuda.get_device_name()}")
+
+    logger.info("")
+
+    if args.action == "prepare":
         prepare_data()
-    elif choice == "2":
-        train_cube_classifier()
-    else:
-        print("Invalid choice")
+    elif args.action == "train":
+        train_cube_classifier(resume_from=args.resume)
+
 
 if __name__ == "__main__":
     main()
