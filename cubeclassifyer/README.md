@@ -7,7 +7,7 @@ This project implements a lightweight object detection system to classify cubes 
 1. **Training Environment**: Desktop PC with RTX 3060 Ti
 2. **Model**: Lightweight CNN for grayscale images
 3. **Deployment Target**: Raspberry Pi 5 with 2GB RAM
-4. **Input Format**: 320x240 grayscale images
+4. **Input Format**: 224x224 grayscale images
 
 ## Features
 
@@ -61,7 +61,7 @@ This project implements a lightweight object detection system to classify cubes 
            └── ...
    ```
 
- 3. Ensure all images are 320x240 grayscale images
+ 3. Ensure all images are 224x224 grayscale images (images will be automatically resized)
 
 4. Run the training script:
     ```bash
@@ -132,7 +132,7 @@ Edit `config.py` to customize training parameters:
 <!-- LLM-NOTE: `check_pytorch.py` is a utility script to verify the PyTorch installation. -->
 <!-- LLM-NOTE: The `cube_dataset` directory needs to be created by the user and populated with images. The `main.py` script can create the directory structure. -->
 - **Architecture**: Custom lightweight CNN for grayscale images
-- **Input Size**: 320x240 grayscale images
+- **Input Size**: 224x224 grayscale images
 - **Output**: Classification (good/defective) with confidence score
 - **Model Size**: Optimized for low memory footprint
 
@@ -142,7 +142,7 @@ Edit `config.py` to customize training parameters:
 - Uses TorchScript for optimized inference on the Pi
 - Image preprocessing is optimized for speed
 - Real-time inference capability on Raspberry Pi 5
-- Camera resolution is set to 320x240 for optimal performance
+- Camera resolution is set to 224x224 for optimal performance
 
 ## Customization
 
