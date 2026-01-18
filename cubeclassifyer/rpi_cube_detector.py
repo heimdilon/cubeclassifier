@@ -48,9 +48,9 @@ def init_camera(camera_index=0):
     for attempt in range(MAX_RETRIES):
         cap = cv2.VideoCapture(camera_index)
         if cap.isOpened():
-            # Set camera resolution to 320x240
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            # Set camera resolution to 224x224
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 224)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 224)
             return cap
 
         if attempt < MAX_RETRIES - 1:
@@ -75,7 +75,7 @@ def preprocess_image(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Resize using OpenCV (much faster than PIL)
-    resized = cv2.resize(gray, (320, 240), interpolation=cv2.INTER_LINEAR)
+    resized = cv2.resize(gray, (224, 224), interpolation=cv2.INTER_LINEAR)
 
     # Normalize to [-1, 1] (equivalent to Normalize(mean=[0.5], std=[0.5]))
     # PIL: (x / 255 - 0.5) / 0.5 = (x - 128) / 128

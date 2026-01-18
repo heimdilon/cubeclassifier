@@ -117,7 +117,7 @@ if __name__ == "__main__":
 
     # Test forward pass
     print("\nTesting forward pass...")
-    dummy_input = torch.randn(2, 1, 240, 320)  # Batch of 2, grayscale
+    dummy_input = torch.randn(2, 1, 224, 224)  # Batch of 2, grayscale
     output = model(dummy_input)
 
     print(f"Input shape: {dummy_input.shape}")
