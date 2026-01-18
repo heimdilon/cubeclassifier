@@ -11,7 +11,7 @@ from cube_classifier import LightweightCubeClassifier
 import os
 
 
-def benchmark_model_inference(model, input_shape=(1, 1, 240, 320), iterations=1000):
+def benchmark_model_inference(model, input_shape=(1, 1, 224, 224), iterations=1000):
     """
     Benchmark model inference speed
 
@@ -183,7 +183,7 @@ def main():
     # Memory usage (if CUDA available)
     if torch.cuda.is_available():
         torch.cuda.reset_peak_memory_stats()
-        dummy_input = torch.randn(1, 1, 240, 320).to(device)
+        dummy_input = torch.randn(1, 1, 224, 224).to(device)
 
         with torch.no_grad():
             _ = model(dummy_input)

@@ -24,7 +24,7 @@ def get_extreme_transforms(train=True):
     """
     # Base transforms (always applied)
     base_transforms = [
-        A.Resize(240, 320),
+        A.Resize(224, 224),
         A.Normalize(mean=[0.5], std=[0.5]),
     ]
 
@@ -128,7 +128,7 @@ def get_moderate_transforms(train=True):
         Composed Albumentations transform
     """
     base_transforms = [
-        A.Resize(240, 320),
+        A.Resize(224, 224),
         A.Normalize(mean=[0.5], std=[0.5]),
     ]
 
@@ -185,7 +185,7 @@ def test_augmentation():
     from PIL import Image
 
     # Create a dummy grayscale image
-    dummy = np.ones((240, 320), dtype=np.uint8) * 200
+    dummy = np.ones((224, 224), dtype=np.uint8) * 200
 
     # Apply transformation
     transform = get_extreme_transforms(train=True)
