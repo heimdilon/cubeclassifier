@@ -21,6 +21,13 @@ This project implements a lightweight object detection system to classify cubes 
 - **Comprehensive Logging**: Timestamped logs to file
 - **CLI Interface**: Non-interactive command-line interface
 
+### Data Collection (Raspberry Pi)
+- **Live Camera Preview**: Real-time view with 224x224 capture region
+- **Simple Controls**: Press `G` for good, `D` for defective, `Q` to quit
+- **Auto-Naming**: Automatic incrementing filenames
+- **Live Counter**: Shows collected good/defective counts
+- **Auto-Processing**: Automatic grayscale conversion and resize
+
 ### Inference (Raspberry Pi)
 - **Confidence Thresholding**: Reject low-confidence predictions
 - **Color-Coded Display**: Green (good), Red (defective), Yellow (uncertain)
@@ -90,18 +97,37 @@ Edit `config.py` to customize training parameters:
 - `SAVE_CHECKPOINT_EVERY`: Save checkpoint interval (default: 5)
 - `LOG_LEVEL`: Logging verbosity (default: "INFO")
 
-### Raspberry Pi Setup (Deployment)
+### Raspberry Pi Setup (Data Collection & Deployment)
 
 1. Install required packages on Raspberry Pi:
    ```bash
    pip install -r rpi_requirements.txt
    ```
 
-  2. Transfer the following files to your Raspberry Pi:
+2. **Collect Training Data** using the data collector:
+    ```bash
+    # Transfer rpi_data_collector.py to Raspberry Pi, then run:
+    python rpi_data_collector.py
+    
+    # Controls:
+    #   [G] - Save as GOOD cube
+    #   [D] - Save as DEFECTIVE cube  
+    #   [Q] - Quit
+    
+    # Custom output directory
+    python rpi_data_collector.py --output-dir my_cubes
+    ```
+    
+    Position the cube inside the yellow box and press G or D to capture.
+    Images are automatically saved as 224x224 grayscale.
+
+3. Transfer collected images to your training PC and organize into train/val folders.
+
+4. After training, transfer the following files to your Raspberry Pi:
     - `cube_classifier_rpi.pt` (generated after training)
     - `rpi_cube_detector.py`
 
-  3. Run the detection script:
+5. Run the detection script:
     ```bash
     # Basic detection
     python rpi_cube_detector.py
