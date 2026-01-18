@@ -13,7 +13,7 @@ from torch.cuda.amp import autocast, GradScaler
 
 # Custom dataset class for cube detection with grayscale images
 class CubeDataset(Dataset):
-    def __init__(self, root_dir, transform=None, target_size=(240, 320)):
+    def __init__(self, root_dir, transform=None, target_size=(224, 224)):
         self.root_dir = root_dir
         self.transform = transform
         self.target_size = target_size
@@ -63,7 +63,7 @@ class CubeDataset(Dataset):
         except Exception as e:
             logger.warning(f"Failed to load image {img_path}: {e}")
             # Return a blank image (all zeros) as fallback
-            image = Image.new("L", (320, 240), 0)
+            image = Image.new("L", (224, 224), 0)
             if self.transform:
                 image = self.transform(image)
             label = torch.tensor(ann["label"], dtype=torch.long)
@@ -360,7 +360,7 @@ def convert_model_for_rpi(model_path, output_path=config.TORCHSCRIPT_MODEL_PATH)
         model.eval()
 
         # Convert to TorchScript for easier deployment
-        example_input = torch.rand(1, 1, 240, 320)  # Grayscale input
+        example_input = torch.rand(1, 1, 224, 224)  # Grayscale input
         traced_model = torch.jit.trace(model, example_input)
         traced_model.save(output_path)
 

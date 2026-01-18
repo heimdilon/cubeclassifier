@@ -34,7 +34,7 @@ def prepare_data():
     logger.info(f"    - good/")
     logger.info(f"    - defective/")
     logger.info(
-        "\nPlease place your 320x240 grayscale cube images in the appropriate folders."
+        "\nPlease place your 224x224 grayscale cube images in the appropriate folders."
     )
 
     print("Data directory structure created:")
@@ -46,7 +46,7 @@ def prepare_data():
     print("    - good/")
     print("    - defective/")
     print(
-        "\nPlease place your 320x240 grayscale cube images in the appropriate folders."
+        "\nPlease place your 224x224 grayscale cube images in the appropriate folders."
     )
 
 
@@ -74,7 +74,7 @@ def train_cube_classifier(resume_from=None):
     if len(train_dataset) == 0 or len(val_dataset) == 0:
         logger.warning("No data found in dataset directories.")
         logger.info(
-            "Please place your 320x240 grayscale cube images in appropriate folders:"
+            "Please place your 224x224 grayscale cube images in appropriate folders:"
         )
         logger.info(f"- {os.path.join(config.TRAIN_DIR, 'good')}/")
         logger.info(f"- {os.path.join(config.TRAIN_DIR, 'defective')}/")
