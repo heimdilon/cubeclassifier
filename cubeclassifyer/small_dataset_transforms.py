@@ -38,7 +38,7 @@ def get_extreme_transforms(train=True):
         A.OneOf(
             [
                 A.GaussNoise(std_range=(10 / 255, 50 / 255), p=1.0),
-                A.GaussNoise(std_range=(25 / 255, 75 / 255), p=1.0),
+                A.GaussNoise(std_range=(55 / 255, 90 / 255), p=1.0),
             ],
             p=0.4,
         ),

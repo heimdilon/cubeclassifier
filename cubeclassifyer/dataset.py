@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -27,7 +27,7 @@ class CubeDataset(Dataset):
         self,
         root_dir: str,
         transform=None,
-        target_size: tuple[int, int] = (224, 224),
+        target_size: Tuple[int, int] = (224, 224),
     ):
         self.root_dir = root_dir
         self.root_dir_abs = os.path.realpath(root_dir)
@@ -158,7 +158,7 @@ class CubeDataset(Dataset):
         ann = self.annotations[idx]
         img_path = self._resolve_image_path(ann["image_path"])
         if img_path is None:
-            raise RuntimeError(
+            raise LookupError(
                 f"Resolved image path is outside dataset root: {ann['image_path']}"
             )
 
@@ -166,7 +166,7 @@ class CubeDataset(Dataset):
             with Image.open(img_path) as image_handle:
                 image = image_handle.convert("L")
         except (UnidentifiedImageError, OSError) as exc:
-            raise RuntimeError(f"Failed to load image '{img_path}': {exc}") from exc
+            raise LookupError(f"Failed to load image '{img_path}': {exc}") from exc
 
         if self.transform:
             image = self.transform(image)
