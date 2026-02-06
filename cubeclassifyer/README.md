@@ -73,13 +73,16 @@ This project implements a lightweight object detection system to classify cubes 
 4. Run the training script:
     ```bash
     # Prepare data directories
-    python main.py prepare
+    python -m cubeclassifyer.main prepare
 
     # Train model
-    python main.py train
+    python -m cubeclassifyer.main train
 
     # Resume from checkpoint
-    python main.py train --resume checkpoints/checkpoint_epoch_10.pth
+    python -m cubeclassifyer.main train --resume checkpoints/checkpoint_epoch_10.pth
+
+    # Export deployment models (TorchScript + ONNX + quantized TorchScript)
+    python -m cubeclassifyer.main export --model-path best_cube_classifier.pth
     ```
 
 5. Monitor training logs:
@@ -145,34 +148,56 @@ Edit `config.py` to customize training parameters:
     python rpi_cube_detector.py --save-frames --save-dir my_frames --threshold 0.9
     ```
 
-  4. Monitor performance:
-    - Press 'q' to quit
-    - View FPS and inference time in real-time
-    - Frames saved to `saved_frames/` if enabled
+   4. Monitor performance:
+     - Press 'q' to quit
+     - View FPS and inference time in real-time
+     - Frames saved to `saved_frames/` if enabled
+
+### Exported Deployment Artifacts
+
+Training or explicit export creates these files:
+- `cube_classifier_rpi.pt` (TorchScript)
+- `cube_classifier_rpi_int8.pt` (quantized TorchScript)
+- `cube_classifier_rpi.onnx` (ONNX)
+
+You can skip optional exports with:
+```bash
+python -m cubeclassifyer.main train --no-onnx --no-quantized
+```
+
+For inference backend selection on Raspberry Pi:
+```bash
+# TorchScript backend (default)
+python rpi_cube_detector.py --backend torchscript --model cube_classifier_rpi.pt
+
+# ONNX Runtime backend
+python rpi_cube_detector.py --backend onnx --model cube_classifier_rpi.onnx
+```
 
 ## Model Details
-<!-- LLM-NOTE: `main.py` is the primary entry point for training the model. -->
-<!-- LLM-NOTE: `cube_classifier.py` defines the CNN model, the dataset class, and the training loop. -->
-<!-- LLM-NOTE: `rpi_cube_detector.py` is the script for running the model on a Raspberry Pi. -->
-<!-- LLM-NOTE: `rpi_requirements.txt` lists the Python dependencies for the Raspberry Pi. -->
-<!-- LLM-NOTE: `check_pytorch.py` is a utility script to verify the PyTorch installation. -->
-<!-- LLM-NOTE: The `cube_dataset` directory needs to be created by the user and populated with images. The `main.py` script can create the directory structure. -->
 - **Architecture**: Custom lightweight CNN for grayscale images
 - **Input Size**: 224x224 grayscale images
 - **Output**: Classification (good/defective) with confidence score
 - **Model Size**: Optimized for low memory footprint
 
+Core modules:
+- `main.py`: CLI entrypoint (`prepare`, `train`, `export`)
+- `dataset.py`: dataset loading and validation
+- `modeling.py`: model definitions
+- `training.py`: transforms and training loop
+- `exporting.py`: TorchScript/ONNX/quantized export helpers
+- `rpi_cube_detector.py`: Raspberry Pi inference CLI
+
 ## Performance Considerations
-<!-- LLM-NOTE: The model is a lightweight CNN designed for efficiency on resource-constrained devices like the Raspberry Pi. -->
 - The model is designed to be lightweight for Raspberry Pi deployment
 - Uses TorchScript for optimized inference on the Pi
 - Image preprocessing is optimized for speed
 - Real-time inference capability on Raspberry Pi 5
-- Camera resolution is set to 224x224 for optimal performance
+- Camera capture defaults to 640x480 and is resized to 224x224 during preprocessing
 
 ## Customization
 
-You can modify the following parameters in `cube_classifier.py`:
+You can modify the following parameters in `config.py`:
 - Number of training epochs
 - Learning rate
 - Batch size
@@ -181,4 +206,3 @@ You can modify the following parameters in `cube_classifier.py`:
 For deployment on Raspberry Pi, you can adjust:
 - Confidence threshold
 - Display settings in `rpi_cube_detector.py`
-<!-- LLM-NOTE: The model is converted to TorchScript for deployment, which is a high-performance model format for PyTorch. -->
