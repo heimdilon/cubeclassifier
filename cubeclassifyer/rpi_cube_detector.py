@@ -1,109 +1,133 @@
-import torch
+import argparse
+import hashlib
+import os
+import re
+import time
+from collections import deque
+from datetime import datetime
+
 import cv2
 import numpy as np
-import time
-import os
-import sys
-import argparse
-from datetime import datetime
-from utils import logger
+import torch
+
+if __package__:
+    from .utils import logger
+else:
+    from utils import logger
 
 
-# Check if model file exists
-MODEL_PATH = "cube_classifier_rpi.pt"
-if not os.path.exists(MODEL_PATH):
-    print(f"Error: Model file '{MODEL_PATH}' not found!")
-    print("Please ensure you have transferred the model file to this directory.")
-    sys.exit(1)
+CLASS_NAMES = ["good", "defective"]
+UNCERTAIN_LABEL = "uncertain"
 
-# Load the TorchScript model
-try:
-    model = torch.jit.load(MODEL_PATH)
-    model.eval()
-    print(f"Model loaded successfully from '{MODEL_PATH}'")
-except Exception as e:
-    print(f"Error loading model: {e}")
-    sys.exit(1)
+DEFAULT_MODEL_PATH = "cube_classifier_rpi.pt"
+DEFAULT_BACKEND = "torchscript"
 
-# Class names
-class_names = ["good", "defective", "uncertain"]
-
-# Confidence threshold for accepting predictions
-CONFIDENCE_THRESHOLD = 0.7
-
-# Camera configuration
 MAX_RETRIES = 3
-RETRY_DELAY = 1  # seconds
-
-# FPS measurement
-FPS_WINDOW_SIZE = 30  # Number of frames to average over
-
-# Frame saving
-SAVE_FRAMES = False
-SAVE_DIR = "saved_frames"
+RETRY_DELAY = 1
+FPS_WINDOW_SIZE = 30
 
 
-def init_camera(camera_index=0):
-    """Initialize camera with error handling and retry logic"""
+def compute_sha256(file_path):
+    hasher = hashlib.sha256()
+    with open(file_path, "rb") as handle:
+        while True:
+            chunk = handle.read(8192)
+            if not chunk:
+                break
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def verify_model_checksum(model_path, expected_sha256=None):
+    if expected_sha256 is None:
+        return
+
+    if re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256) is None:
+        raise ValueError("Invalid SHA256 format. Expected 64 hexadecimal characters.")
+
+    actual_sha256 = compute_sha256(model_path)
+    if actual_sha256.lower() != expected_sha256.lower():
+        raise ValueError(
+            f"Model checksum mismatch. Expected {expected_sha256}, got {actual_sha256}."
+        )
+
+
+def init_camera(camera_index=0, width=640, height=480):
     for attempt in range(MAX_RETRIES):
         cap = cv2.VideoCapture(camera_index)
         if cap.isOpened():
-            # Set camera resolution to 224x224
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 224)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 224)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
             return cap
 
         if attempt < MAX_RETRIES - 1:
             logger.warning(
-                f"Camera initialization failed (attempt {attempt + 1}/{MAX_RETRIES}), retrying..."
+                "Camera initialization failed (attempt %s/%s), retrying...",
+                attempt + 1,
+                MAX_RETRIES,
             )
             time.sleep(RETRY_DELAY)
 
     return None
 
 
+def load_torchscript_model(model_path=DEFAULT_MODEL_PATH, model_sha256=None):
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"Model file '{model_path}' not found. Please copy it to this directory."
+        )
+
+    verify_model_checksum(model_path, model_sha256)
+    model = torch.jit.load(model_path)
+    model.eval()
+    return model
+
+
+def load_onnx_model(model_path, model_sha256=None):
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"ONNX model file '{model_path}' not found. Please copy it to this directory."
+        )
+
+    verify_model_checksum(model_path, model_sha256)
+
+    try:
+        import onnxruntime as ort
+    except ImportError as exc:
+        raise RuntimeError(
+            "onnxruntime is required for --backend onnx. Install it first."
+        ) from exc
+
+    return ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+
+
 def preprocess_image(image):
-    """Optimized preprocessing using OpenCV directly (faster than PIL)
-
-    Args:
-        image: Raw BGR image from camera
-
-    Returns:
-        Preprocessed tensor ready for model
-    """
-    # Convert to grayscale (OpenCV is faster than PIL)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Resize using OpenCV (much faster than PIL)
     resized = cv2.resize(gray, (224, 224), interpolation=cv2.INTER_LINEAR)
-
-    # Normalize to [-1, 1] (equivalent to Normalize(mean=[0.5], std=[0.5]))
-    # PIL: (x / 255 - 0.5) / 0.5 = (x - 128) / 128
-    normalized = (resized.astype(np.float32) - 128.0) / 128.0
-
-    # Convert to tensor directly from NumPy (skip PIL step)
-    tensor = torch.from_numpy(normalized).unsqueeze(0).unsqueeze(0)
-
-    return tensor
+    normalized = (resized.astype(np.float32) / 255.0 - 0.5) / 0.5
+    return normalized[np.newaxis, np.newaxis, :, :]
 
 
-def predict_cube(image):
-    """Predict if cube is good or defective"""
-    # Preprocess image
-    input_tensor = preprocess_image(image)
+def predict_cube(image, model, backend, confidence_threshold):
+    input_array = preprocess_image(image)
 
-    # Run inference
-    with torch.no_grad():
-        outputs = model(input_tensor)
-        probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
-        predicted_class = torch.argmax(probabilities).item()
-        confidence = probabilities[predicted_class].item()
+    if backend == "onnx":
+        input_name = model.get_inputs()[0].name
+        outputs = model.run(None, {input_name: input_array})
+        logits = torch.from_numpy(outputs[0][0])
+    else:
+        input_tensor = torch.from_numpy(input_array)
+        with torch.no_grad():
+            logits = model(input_tensor)[0].cpu()
 
-    # Check if confidence is below threshold
-    if confidence < CONFIDENCE_THRESHOLD:
-        return class_names[2], confidence  # Return "uncertain"
+    probabilities = torch.nn.functional.softmax(logits, dim=0)
+    predicted_class = int(torch.argmax(probabilities).item())
+    confidence = float(probabilities[predicted_class].item())
 
-    return class_names[predicted_class], confidence
+    if confidence < confidence_threshold:
+        return UNCERTAIN_LABEL, confidence
+
+    return CLASS_NAMES[predicted_class], confidence
 
 
 def main():
@@ -111,10 +135,15 @@ def main():
         description="Cube Detector - Real-time defect detection"
     )
     parser.add_argument(
-        "--camera", type=int, default=0, help="Camera index (default: 0)"
+        "--camera",
+        type=int,
+        default=0,
+        help="Camera index (default: 0)",
     )
     parser.add_argument(
-        "--save-frames", action="store_true", help="Save frames with detections"
+        "--save-frames",
+        action="store_true",
+        help="Save frames with detections",
     )
     parser.add_argument(
         "--save-dir",
@@ -128,72 +157,102 @@ def main():
         default=0.7,
         help="Confidence threshold (default: 0.7)",
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=DEFAULT_MODEL_PATH,
+        help=f"Model path (default: {DEFAULT_MODEL_PATH})",
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        choices=["torchscript", "onnx"],
+        default=DEFAULT_BACKEND,
+        help="Inference backend to use (default: torchscript)",
+    )
+    parser.add_argument(
+        "--model-sha256",
+        type=str,
+        default=None,
+        help="Optional expected SHA256 checksum for model provenance validation",
+    )
 
     args = parser.parse_args()
+    exit_code = 0
 
-    # Update global config from arguments
-    global SAVE_FRAMES, SAVE_DIR, CONFIDENCE_THRESHOLD
-    SAVE_FRAMES = args.save_frames
-    SAVE_DIR = args.save_dir
-    CONFIDENCE_THRESHOLD = args.threshold
+    try:
+        if args.backend == "onnx":
+            model = load_onnx_model(args.model, model_sha256=args.model_sha256)
+        else:
+            model = load_torchscript_model(args.model, model_sha256=args.model_sha256)
+        logger.info(
+            "Model loaded successfully from '%s' using backend '%s'",
+            args.model,
+            args.backend,
+        )
+    except Exception as exc:
+        logger.error(f"Error loading model: {exc}")
+        return 1
 
-    # Create save directory if needed
-    if SAVE_FRAMES:
-        os.makedirs(SAVE_DIR, exist_ok=True)
-        logger.info(f"Saving frames to: {SAVE_DIR}")
+    if args.save_frames:
+        os.makedirs(args.save_dir, exist_ok=True)
+        logger.info(f"Saving frames to: {args.save_dir}")
 
-    # Initialize camera
     cap = init_camera(camera_index=args.camera)
-
     if cap is None:
         logger.error("Could not initialize camera after multiple attempts")
-        return
+        return 1
 
-    logger.info(f"Starting cube detection. Press 'q' to quit.")
-    logger.info(f"Confidence threshold: {CONFIDENCE_THRESHOLD}")
+    logger.info("Starting cube detection. Press 'q' to quit.")
+    logger.info(f"Confidence threshold: {args.threshold}")
 
-    # FPS tracking variables
-    frame_times = []
+    frame_times = deque(maxlen=FPS_WINDOW_SIZE)
 
     try:
         while True:
-            # Capture frame
             frame_start = time.time()
             ret, frame = cap.read()
             if not ret:
                 logger.error("Could not read frame. Attempting to reconnect...")
                 cap.release()
-                cap = init_camera(camera_index=0)
+                cap = init_camera(camera_index=args.camera)
 
                 if cap is None:
                     logger.error("Failed to reconnect. Exiting.")
+                    exit_code = 1
                     break
 
-                continue  # Skip this iteration and try again with new cap
+                continue
 
-            # Make prediction
-            start_time = time.time()
-            prediction, confidence = predict_cube(frame)
-            inference_time = time.time() - start_time
+            inference_start = time.time()
+            prediction, confidence = predict_cube(
+                frame,
+                model=model,
+                backend=args.backend,
+                confidence_threshold=args.threshold,
+            )
+            inference_time = time.time() - inference_start
 
-            # Calculate FPS
             frame_time = time.time() - frame_start
             frame_times.append(frame_time)
-            if len(frame_times) > FPS_WINDOW_SIZE:
-                frame_times.pop(0)
-            fps = 1.0 / (sum(frame_times) / len(frame_times))
+            fps = len(frame_times) / sum(frame_times) if frame_times else 0.0
 
-            # Determine color based on prediction
             if prediction == "good":
-                color = (0, 255, 0)  # Green
+                color = (0, 255, 0)
             elif prediction == "defective":
-                color = (0, 0, 255)  # Red
-            else:  # uncertain
-                color = (0, 255, 255)  # Yellow
+                color = (0, 0, 255)
+            else:
+                color = (0, 255, 255)
 
-            # Display result on frame
-            label = f"{prediction}: {confidence:.2f}"
-            cv2.putText(frame, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+            cv2.putText(
+                frame,
+                f"{prediction}: {confidence:.2f}",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                color,
+                2,
+            )
             cv2.putText(
                 frame,
                 f"Inf: {inference_time * 1000:.1f}ms FPS: {fps:.1f}",
@@ -204,28 +263,28 @@ def main():
                 2,
             )
 
-            # Show frame
             cv2.imshow("Cube Detection", frame)
 
-            # Save frame if enabled
-            if SAVE_FRAMES:
+            if args.save_frames:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                 safe_prediction = prediction.replace(" ", "_")
-                filename = os.path.join(SAVE_DIR, f"{safe_prediction}_{timestamp}.jpg")
+                filename = os.path.join(
+                    args.save_dir,
+                    f"{safe_prediction}_{timestamp}.jpg",
+                )
                 cv2.imwrite(filename, frame)
 
-            # Break loop on 'q' key press
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user. Cleaning up...")
     finally:
-        # Release resources (ensure cleanup always happens)
         cap.release()
         cv2.destroyAllWindows()
         logger.info("Cube detection stopped")
+    return exit_code
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

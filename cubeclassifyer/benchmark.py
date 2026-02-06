@@ -3,12 +3,16 @@ Benchmark script for cube classifier
 Run this before and after optimizations to measure improvements
 """
 
-import torch
-import torch.nn as nn
-import time
-import numpy as np
-from cube_classifier import LightweightCubeClassifier
 import os
+import time
+
+import numpy as np
+import torch
+
+if __package__:
+    from .modeling import LightweightCubeClassifier
+else:
+    from modeling import LightweightCubeClassifier
 
 
 def benchmark_model_inference(model, input_shape=(1, 1, 224, 224), iterations=1000):
@@ -126,23 +130,27 @@ def compare_models(
     print(f"{'=' * 70}\n")
 
     metrics = [
-        ("Average Time", base_results["avg"], optimized_results["avg"], "ms"),
-        ("FPS", base_results["fps"], optimized_results["fps"], "fps"),
+        ("Average Time", base_results["avg"], optimized_results["avg"], "ms", False),
+        ("FPS", base_results["fps"], optimized_results["fps"], "fps", True),
     ]
 
-    for name, base_val, opt_val, unit in metrics:
-        if opt_val < base_val:
-            improvement = ((base_val - opt_val) / base_val) * 100
-            print(f"{name}:")
-            print(f"  {base_name}:    {base_val:.2f} {unit}")
-            print(f"  {optimized_name}: {opt_val:.2f} {unit}")
-            print(f"  Improvement: {improvement:+.1f}%")
+    for name, base_val, opt_val, unit, higher_is_better in metrics:
+        if base_val == 0:
+            change_pct = float("inf")
+        elif higher_is_better:
+            change_pct = ((opt_val - base_val) / base_val) * 100
         else:
-            regression = ((opt_val - base_val) / base_val) * 100
-            print(f"{name}:")
-            print(f"  {base_name}:    {base_val:.2f} {unit}")
-            print(f"  {optimized_name}: {opt_val:.2f} {unit}")
-            print(f"  Regression:  {regression:+.1f}% ⚠️")
+            change_pct = ((base_val - opt_val) / base_val) * 100
+
+        improved = change_pct > 0
+
+        print(f"{name}:")
+        print(f"  {base_name}:    {base_val:.2f} {unit}")
+        print(f"  {optimized_name}: {opt_val:.2f} {unit}")
+        if improved:
+            print(f"  Improvement: {change_pct:+.1f}%")
+        else:
+            print(f"  Regression:  {abs(change_pct):+.1f}% [WARNING]")
 
 
 def main():
@@ -196,7 +204,7 @@ def main():
     print("  Benchmark Complete!")
     print(f"{'=' * 70}\n")
 
-    print("\n💡 Tips for optimization:")
+    print("\n[Tips for optimization]")
     print("  - Run this script BEFORE applying optimizations")
     print("  - Apply optimizations from OPTIMIZATION_SUGGESTIONS.md")
     print("  - Run this script AGAIN to measure improvements")

@@ -32,11 +32,25 @@ def add_scratch(image, intensity_range=(30, 70), length_range=(10, 50)):
         # Draw scratch (dark line)
         intensity = random.randint(*intensity_range)
         thickness = random.randint(1, 2)
-        cv2.line(defective, (x1, y1), (x2, y2), intensity, -1, thickness)
+        cv2.line(
+            defective,
+            (x1, y1),
+            (x2, y2),
+            intensity,
+            thickness=thickness,
+            lineType=cv2.LINE_AA,
+        )
 
         # Add slight thickness variation
         if random.random() > 0.5:
-            cv2.line(defective, (x1 + 1, y1), (x2 + 1, y2), intensity // 2, -1, 1)
+            cv2.line(
+                defective,
+                (x1 + 1, y1),
+                (x2 + 1, y2),
+                intensity // 2,
+                thickness=1,
+                lineType=cv2.LINE_AA,
+            )
 
     return defective
 
@@ -64,9 +78,9 @@ def add_dent(image, radius_range=(8, 25)):
                 (x, y),
                 (radius, radius_y),
                 0,
+                0,
                 360,
                 random.randint(20, 50),
-                -1,
                 -1,
             )
 
@@ -85,25 +99,39 @@ def add_crack(image, length_range=(15, 40)):
         # Starting point
         x, y = random.randint(10, w - 10), random.randint(10, h - 10)
 
-        # Generate jagged crack path
-        num_points = random.randint(4, 8)
+        # Generate jagged crack path with a target length budget
+        target_length = random.randint(*length_range)
+        current_length = 0.0
         points = [(x, y)]
 
-        for _ in range(num_points):
+        while current_length < target_length:
             # Random offset to create jaggedness
             offset_x = random.randint(-10, 10)
             offset_y = random.randint(-10, 10)
-            x = max(0, min(w - 1, x + offset_x))
-            y = max(0, min(h - 1, y + offset_y))
+            next_x = max(0, min(w - 1, x + offset_x))
+            next_y = max(0, min(h - 1, y + offset_y))
+
+            segment_length = float(np.hypot(next_x - x, next_y - y))
+            if segment_length == 0:
+                continue
+
+            current_length += segment_length
+            x, y = next_x, next_y
             points.append((x, y))
 
         # Draw crack
         points = np.array(points, dtype=np.int32)
-        length = random.randint(*length_range)
         thickness = random.randint(1, 3)
         intensity = random.randint(30, 60)
 
-        cv2.polylines(defective, [points], False, intensity, -1, thickness)
+        cv2.polylines(
+            defective,
+            [points],
+            False,
+            intensity,
+            thickness=thickness,
+            lineType=cv2.LINE_AA,
+        )
 
     return defective
 
@@ -124,13 +152,13 @@ def add_stain(image, radius_range=(10, 35)):
 
         # Draw stain (dark ellipse)
         intensity = random.randint(30, 60)
-        cv2.ellipse(defective, (x, y), (radius_x, radius_y), 0, 360, intensity, -1, -1)
+        cv2.ellipse(defective, (x, y), (radius_x, radius_y), 0, 0, 360, intensity, -1)
 
         # Add some blur for realism
         if random.random() > 0.5:
             blurred = cv2.GaussianBlur(defective, (3, 3), 0)
             # Blend original and blurred
-            defective = cv2.addWeighted(defective, 0.7, blurred, 0.3)
+            defective = cv2.addWeighted(defective, 0.7, blurred, 0.3, 0)
 
     return defective
 
@@ -232,8 +260,8 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="cube_dataset/train/defective_synth",
-        help="Output directory for synthetic defective images",
+        default="cube_dataset/train/defective",
+        help="Output directory for synthetic defective images (default: cube_dataset/train/defective)",
     )
     parser.add_argument(
         "--num-per-image",
