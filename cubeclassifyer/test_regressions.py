@@ -19,7 +19,6 @@ if __package__:
         add_scratch,
         add_stain,
     )
-    from .rpi_cube_detector import preprocess_image
 else:
     import rpi_cube_detector as detector
     import transfer_learning_model as tlm
@@ -31,7 +30,6 @@ else:
         add_scratch,
         add_stain,
     )
-    from rpi_cube_detector import preprocess_image
 
 
 TransferLearningCubeClassifier = tlm.TransferLearningCubeClassifier
@@ -113,7 +111,7 @@ class NormalizationConsistencyTests(unittest.TestCase):
         for p in [0, 64, 127, 128, 192, 255]:
             train_val = (p / 255.0 - 0.5) / 0.5
             frame = np.full((224, 224, 3), p, dtype=np.uint8)
-            rpi_val = preprocess_image(frame)[0, 0, 0, 0]
+            rpi_val = detector.preprocess_image(frame)[0, 0, 0, 0]
             self.assertAlmostEqual(float(train_val), float(rpi_val), places=5)
 
 
